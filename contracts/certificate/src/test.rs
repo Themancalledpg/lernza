@@ -11,6 +11,16 @@ fn setup() -> (Env, CertificateContractClient<'static>, Address) {
     (env, client, owner)
 }
 
+/// Returns a client whose auth context is NOT mocked, so require_auth() calls
+/// will behave as they would on-chain.
+fn setup_no_mock_auths() -> (Env, CertificateContractClient<'static>, Address) {
+    let env = Env::default();
+    let owner = Address::generate(&env);
+    let contract_id = env.register(CertificateContract, (owner.clone(),));
+    let client = CertificateContractClient::new(&env, &contract_id);
+    (env, client, owner)
+}
+
 #[test]
 fn test_certificate_minting() {
     let (env, client, owner) = setup();
@@ -117,4 +127,40 @@ fn test_user_certificate_details() {
     }
     assert!(cert_ids.contains(cert1_id));
     assert!(cert_ids.contains(cert2_id));
+}
+
+#[test]
+fn test_mint_quest_certificate_by_owner() {
+    let (env, client, _owner) = setup();
+    let recipient = Address::generate(&env);
+    let quest_id = 5u32;
+
+    // Owner (mocked as milestone contract) can call mint_quest_certificate
+    let token_id = client.mint_quest_certificate(
+        &quest_id,
+        &String::from_str(&env, "Soroban Basics"),
+        &String::from_str(&env, "Blockchain"),
+        &recipient,
+    );
+
+    let metadata = client.get_certificate_metadata(&token_id);
+    assert_eq!(metadata.quest_id, quest_id);
+    assert_eq!(metadata.recipient, recipient);
+    assert!(client.has_quest_certificate(&quest_id, &recipient));
+}
+
+#[test]
+fn test_mint_quest_certificate_unauthorized_caller() {
+    let (env, client, _owner) = setup_no_mock_auths();
+    // Neither the owner nor any authorization has been granted.
+    // The #[only_owner] guard must reject this call.
+    let recipient = Address::generate(&env);
+    let result = client.try_mint_quest_certificate(
+        &1u32,
+        &String::from_str(&env, "Test Quest"),
+        &String::from_str(&env, "Test"),
+        &recipient,
+    );
+    // Auth failure surfaces as a host error, not a contract error
+    assert!(result.is_err());
 }

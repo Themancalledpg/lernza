@@ -162,7 +162,11 @@ impl CertificateContract {
         env.storage().persistent().has(&key)
     }
 
-    /// Mint a certificate for quest completion (internal function called by milestone contract)
+    /// Mint a certificate for quest completion. Only callable by the contract owner
+    /// (the milestone contract), which is enforced by the #[only_owner] guard.
+    /// Without this guard any external address could invoke this function directly
+    /// and mint certificates for arbitrary quest/recipient pairs.
+    #[only_owner]
     pub fn mint_quest_certificate(
         env: Env,
         quest_id: u32,
